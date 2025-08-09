@@ -1,0 +1,533 @@
+<!-- admin-dashboard.html -->
+<!--
+  Single-file Admin Login + Dashboard UI
+  - Save as admin-dashboard.html and open in your browser.
+  - Assumptions about backend endpoints (adjust URLs if yours differ):
+      GET  /orders                -> returns JSON array of orders
+      POST /orders/cancel        -> body { id: "<orderId>" }  (marks order cancelled)
+      POST /admin/login (optional) -> not required for this client-only auth
+  - This file uses a client-side hardcoded admin credential (for quick use).
+  - Credentials (change inside the <script> if you want):
+      email: admin@codenex.local
+      password: Codenex@2025
+-->
+<!doctype html>
+<html lang="bn">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Admin • Order Dashboard</title>
+
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+
+  <style>
+    /* small visual tweaks */
+    body { background: #f3f4f6; }
+    .toast-enter { animation: toastIn .2s ease; }
+    @keyframes toastIn { from { transform: translateY(-8px); opacity:0 } to { transform: translateY(0); opacity:1 } }
+    .table-scroll { max-height: 52vh; overflow:auto; }
+  </style>
+</head>
+<body class="font-inter antialiased">
+
+  <!-- HEADER -->
+  <header class="bg-white shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-4">
+        <img src="https://raw.githubusercontent.com/favicon/logo.png" alt="logo" class="h-8 w-8 object-contain" onerror="this.style.display='none'"/>
+        <div>
+          <h1 class="text-lg font-semibold">Codenex • Order Dashboard</h1>
+          <p class="text-xs text-gray-500">Admin panel — auto-refresh every 2 minutes • auto-backup every 24 hours</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <div id="stats" class="flex items-center gap-3">
+          <!-- dynamic stats go here -->
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="downloadBtn" class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-3 py-2 rounded flex items-center gap-2">
+            <i class="fa-solid fa-download"></i> ডাউনলোড
+          </button>
+          <button id="logoutBtn" class="bg-gray-100 hover:bg-gray-200 text-sm px-3 py-2 rounded">লগ আউট</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN -->
+  <main class="max-w-7xl mx-auto px-4 py-8">
+    <div id="content" class="hidden">
+
+      <!-- FILTERS & SUMMARY -->
+      <div class="flex flex-col lg:flex-row gap-4 mb-6">
+        <div class="flex-1 grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div class="bg-white p-4 rounded shadow">
+            <div class="text-sm text-gray-500">মোট অর্ডার</div>
+            <div id="totalOrders" class="text-2xl font-bold mt-2">0</div>
+          </div>
+          <div class="bg-white p-4 rounded shadow">
+            <div class="text-sm text-gray-500">Pending</div>
+            <div id="pendingOrders" class="text-2xl font-bold mt-2">0</div>
+          </div>
+          <div class="bg-white p-4 rounded shadow">
+            <div class="text-sm text-gray-500">Cancelled</div>
+            <div id="cancelledOrders" class="text-2xl font-bold mt-2">0</div>
+          </div>
+          <div class="bg-white p-4 rounded shadow">
+            <div class="text-sm text-gray-500">মোট টাকাঃ</div>
+            <div id="totalAmount" class="text-2xl font-bold mt-2">৳0</div>
+          </div>
+        </div>
+
+        <div class="w-full lg:w-1/3 flex gap-2 items-center">
+          <input id="searchInput" type="search" placeholder="মোবাইল / নাম / জেলা খুঁজুন..." class="flex-1 p-3 rounded border bg-white" />
+          <select id="statusFilter" class="p-3 rounded border bg-white">
+            <option value="all">সব স্ট্যাটাস</option>
+            <option value="pending">Pending</option>
+            <option value="delivered">Delivered</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- TABLE -->
+      <div class="bg-white rounded shadow overflow-hidden">
+        <div class="p-4 border-b flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <h2 class="font-semibold">Order List</h2>
+            <span id="lastUpdated" class="text-sm text-gray-500"></span>
+          </div>
+          <div class="flex items-center gap-2">
+            <label class="text-sm text-gray-600">Auto-refresh</label>
+            <input id="autoRefreshToggle" type="checkbox" checked class="h-5 w-5"/>
+          </div>
+        </div>
+
+        <div class="table-scroll">
+          <table class="min-w-full divide-y">
+            <thead class="bg-gray-50 sticky top-0">
+              <tr class="text-left">
+                <th class="px-4 py-3 text-sm">#</th>
+                <th class="px-4 py-3 text-sm">সময়</th>
+                <th class="px-4 py-3 text-sm">গ্রাহক</th>
+                <th class="px-4 py-3 text-sm">বিনা/আইটেম</th>
+                <th class="px-4 py-3 text-sm">ঠিকানা</th>
+                <th class="px-4 py-3 text-sm">মোট</th>
+                <th class="px-4 py-3 text-sm">স্ট্যাটাস</th>
+                <th class="px-4 py-3 text-sm">কর্ম</th>
+              </tr>
+            </thead>
+            <tbody id="ordersTbody" class="bg-white divide-y"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- FOOTER -->
+      <div class="mt-6 flex justify-between items-center text-sm text-gray-600">
+        <div>Auto backup: প্রতি ২৪ ঘন্টায় একবার (ক্লায়েন্ট-সাইড ট্রিগার — ব্যাকএন্ডে সংরক্ষণ করলে ভাল)</div>
+        <div>আপনি চাইলে এ UI-র ব্যাকএন্ড এন্ডপয়েন্টসমূহ পরিবর্তন করতে পারবেন।</div>
+      </div>
+    </div>
+  </main>
+
+  <!-- LOGIN MODAL -->
+  <div id="loginWrap" class="min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-md">
+      <div class="bg-white rounded-xl shadow-lg p-6">
+        <h2 class="text-2xl font-bold mb-2">অ্যাডমিন লগইন</h2>
+        <p class="text-sm text-gray-500 mb-4">প্রবেশ করতে আপনার অ্যাকাউন্ট ব্যবহার করুন</p>
+
+        <form id="loginForm" class="space-y-4">
+          <div>
+            <label class="text-sm block mb-1">ইমেইল</label>
+            <input id="email" type="email" required class="w-full p-3 border rounded" placeholder="admin@codenex.local" />
+          </div>
+          <div>
+            <label class="text-sm block mb-1">পাসওয়ার্ড</label>
+            <input id="password" type="password" required class="w-full p-3 border rounded" placeholder="Your password" />
+          </div>
+
+          <div class="flex items-center justify-between gap-2">
+            <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded flex items-center gap-2">
+              <i class="fa-solid fa-lock"></i> লগইন
+            </button>
+
+            <div class="text-xs text-gray-500">
+              <div><strong>ডেমো ক্রেডেনশিয়াল:</strong></div>
+              <div>ইমেইল: <code>admin@codenex.local</code></div>
+              <div>পাস: <code>Codenex@2025</code></div>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div id="toast" class="fixed right-6 bottom-6 bg-black text-white px-4 py-3 rounded hidden"></div>
+
+<script>
+/* ==========================
+   Configuration — edit if needed
+   ========================== */
+const CONFIG = {
+  // Hardcoded admin credential (client-side). Change as you like.
+  adminEmail: 'admin@codenex.local',
+  adminPassword: 'Codenex@2025',
+
+  // Backend endpoints (update to match your server)
+  endpoints: {
+    getOrders: 'http://localhost:5000/orders',      // GET
+    cancelOrder: 'http://localhost:5000/orders/cancel' // POST { id }
+  },
+
+  autoRefreshMs: 2 * 60 * 1000,  // 2 minutes
+  autoBackupMs: 24 * 60 * 60 * 1000, // 24 hours
+  // For quicker local testing, set smaller values above.
+};
+/* ==========================
+   End config
+   ========================== */
+
+const loginWrap = document.getElementById('loginWrap');
+const content = document.getElementById('content');
+const loginForm = document.getElementById('loginForm');
+const toast = document.getElementById('toast');
+const ordersTbody = document.getElementById('ordersTbody');
+const totalOrdersEl = document.getElementById('totalOrders');
+const pendingOrdersEl = document.getElementById('pendingOrders');
+const cancelledOrdersEl = document.getElementById('cancelledOrders');
+const totalAmountEl = document.getElementById('totalAmount');
+const lastUpdated = document.getElementById('lastUpdated');
+const downloadBtn = document.getElementById('downloadBtn');
+const searchInput = document.getElementById('searchInput');
+const statusFilter = document.getElementById('statusFilter');
+const autoRefreshToggle = document.getElementById('autoRefreshToggle');
+const logoutBtn = document.getElementById('logoutBtn');
+const statsDiv = document.getElementById('stats');
+
+let ordersCache = [];
+let refreshTimer = null;
+let backupTimer = null;
+
+/* Simple toast */
+function showToast(msg, ms=3000) {
+  toast.innerText = msg;
+  toast.classList.remove('hidden');
+  toast.classList.add('toast-enter');
+  setTimeout(()=>{ toast.classList.add('hidden'); }, ms);
+}
+
+/* Authentication (client-side) */
+function isLoggedIn() {
+  return !!sessionStorage.getItem('adminToken');
+}
+function requireLoginUI() {
+  if (isLoggedIn()) {
+    loginWrap.classList.add('hidden');
+    content.classList.remove('hidden');
+    startDashboard();
+  } else {
+    loginWrap.classList.remove('hidden');
+    content.classList.add('hidden');
+  }
+}
+loginForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const email = document.getElementById('email').value.trim();
+  const pass = document.getElementById('password').value;
+  if (email === CONFIG.adminEmail && pass === CONFIG.adminPassword) {
+    // create a simple session token (not secure, demo only)
+    sessionStorage.setItem('adminToken', btoa(email + ':' + Date.now()));
+    requireLoginUI();
+    showToast('সফলভাবে লগইন করা হয়েছে।');
+  } else {
+    showToast('ইমেইল অথবা পাসওয়ার্ড ভুল।', 3500);
+  }
+});
+
+logoutBtn.addEventListener('click', () => {
+  sessionStorage.removeItem('adminToken');
+  location.reload();
+});
+
+/* Fetch orders from backend */
+async function fetchOrders() {
+  try {
+    const res = await fetch(CONFIG.endpoints.getOrders, { cache: 'no-store' });
+    if (!res.ok) throw new Error('Failed to fetch orders: ' + res.status);
+    const data = await res.json();
+    // normalize: ensure array
+    ordersCache = Array.isArray(data) ? data.slice().reverse() : [];
+    renderOrders();
+    updateSummary();
+    const now = new Date();
+    lastUpdated.innerText = `আপডেট: ${now.toLocaleString('bn-BD')}`;
+  } catch (err) {
+    console.error(err);
+    showToast('অর্ডার আনার সময় সমস্যা হয়েছে — সার্ভার দেখুন।', 4000);
+  }
+}
+
+/* Render orders into table */
+function renderOrders() {
+  const q = searchInput.value.trim().toLowerCase();
+  const status = statusFilter.value;
+  ordersTbody.innerHTML = '';
+  let count = 0;
+  ordersCache.forEach((order, idx) => {
+    // expected fields: _id or id, phone, name, district, upazila, address, order_json, delivery_charge, total_amount, status, createdAt
+    const id = order._id || order.id || ('ord-'+idx);
+    const phone = order.phone || order.contact || '';
+    const name = order.name || order.customer || '';
+    const district = order.district || '';
+    const upazila = order.upazila || '';
+    const rawItems = order.order_json || order.items || [];
+    const parsedItems = (typeof rawItems === 'string') ? safeJsonParse(rawItems, []) : rawItems;
+    const itemsText = Array.isArray(parsedItems) ? parsedItems.map(it => `${it.name || it.title || ''}×${it.qty||it.quantity||1}`).join(', ') : String(parsedItems);
+    const total = order.total_amount || order.total || order.amount || 0;
+    const delivery = order.delivery_charge || 0;
+    const statusText = (order.status || 'pending').toLowerCase();
+
+    // filters
+    if (status !== 'all' && status !== statusText) return;
+    const combined = (phone + ' ' + name + ' ' + district + ' ' + upazila + ' ' + itemsText).toLowerCase();
+    if (q && combined.indexOf(q) === -1) return;
+
+    count++;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="px-4 py-3 text-sm align-top">${count}</td>
+      <td class="px-4 py-3 text-sm align-top whitespace-nowrap">${formatDate(order.createdAt)}</td>
+      <td class="px-4 py-3 text-sm align-top">
+        <div class="font-semibold">${escapeHtml(name)}</div>
+        <div class="text-xs text-gray-500">${escapeHtml(phone)}</div>
+      </td>
+      <td class="px-4 py-3 text-sm align-top">${escapeHtml(itemsText)}</td>
+      <td class="px-4 py-3 text-sm align-top">${escapeHtml(district + ', ' + upazila + ' — ' + (order.address || ''))}</td>
+      <td class="px-4 py-3 text-sm align-top">৳${Number(total) + 0}</td>
+      <td class="px-4 py-3 text-sm align-top">
+        <span class="px-2 py-1 rounded text-xs ${statusBadgeClass(statusText)}">${statusText}</span>
+      </td>
+      <td class="px-4 py-3 text-sm align-top">
+        <div class="flex items-center gap-2">
+          <button data-id="${id}" class="markDeliveredBtn bg-green-600 text-white px-2 py-1 rounded text-xs">Delivered</button>
+          <button data-id="${id}" class="cancelBtn bg-red-600 text-white px-2 py-1 rounded text-xs">Cancel</button>
+          <button data-id="${id}" class="viewBtn bg-gray-100 px-2 py-1 rounded text-xs">View</button>
+        </div>
+      </td>
+    `;
+    ordersTbody.appendChild(tr);
+  });
+
+  // attach listeners
+  document.querySelectorAll('.cancelBtn').forEach(btn => btn.onclick = handleCancelOrder);
+  document.querySelectorAll('.markDeliveredBtn').forEach(btn => btn.onclick = handleMarkDelivered);
+  document.querySelectorAll('.viewBtn').forEach(btn => btn.onclick = handleViewOrder);
+}
+
+/* Helpers */
+function safeJsonParse(s, fallback=[]) {
+  try { return JSON.parse(s); } catch(e){ return fallback; }
+}
+function escapeHtml(s='') {
+  return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+}
+function formatDate(d) {
+  if (!d) return '-';
+  const dt = new Date(d);
+  if (isNaN(dt)) return String(d);
+  return dt.toLocaleString('bn-BD');
+}
+function statusBadgeClass(status) {
+  if (status.includes('pending')) return 'bg-yellow-100 text-yellow-800';
+  if (status.includes('cancel')) return 'bg-red-100 text-red-800';
+  if (status.includes('deliv') || status.includes('paid')) return 'bg-green-100 text-green-800';
+  return 'bg-gray-100 text-gray-800';
+}
+
+/* Update top summary */
+function updateSummary() {
+  const total = ordersCache.length;
+  const pending = ordersCache.filter(o => ((o.status || 'pending').toLowerCase().includes('pending'))).length;
+  const cancelled = ordersCache.filter(o => ((o.status || '').toLowerCase().includes('cancel'))).length;
+  const sum = ordersCache.reduce((acc, o) => acc + Number(o.total_amount || o.total || o.amount || 0), 0);
+
+  totalOrdersEl.innerText = total;
+  pendingOrdersEl.innerText = pending;
+  cancelledOrdersEl.innerText = cancelled;
+  totalAmountEl.innerText = `৳${sum}`;
+
+  // small badges on header
+  statsDiv.innerHTML = `
+    <div class="px-3 py-2 bg-white rounded shadow text-sm">
+      <div class="text-xs text-gray-500">New (24h)</div>
+      <div class="font-semibold">${ordersCache.filter(o=>isNewWithin(o.createdAt,24)).length}</div>
+    </div>
+  `;
+}
+function isNewWithin(createdAt, hours=24) {
+  if (!createdAt) return false;
+  const dt = new Date(createdAt);
+  if (isNaN(dt)) return false;
+  return (Date.now() - dt.getTime()) <= (hours*60*60*1000);
+}
+
+/* Order actions */
+async function handleCancelOrder(e) {
+  const id = e.currentTarget.dataset.id;
+  if (!confirm('এই অর্ডারটি ক্যান্সেল করবেন?')) return;
+  try {
+    const res = await fetch(CONFIG.endpoints.cancelOrder, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ id })
+    });
+    if (!res.ok) throw new Error('Failed to cancel');
+    showToast('অর্ডার ক্যান্সেল করা হলো।');
+    // optimistic update: mark local cache
+    ordersCache = ordersCache.map(o => {
+      const oid = o._id || o.id || '';
+      if (String(oid) === String(id)) return { ...o, status: 'cancelled' };
+      return o;
+    });
+    renderOrders();
+    updateSummary();
+  } catch (err) {
+    console.error(err);
+    showToast('ক্যান্সেল করতে সমস্যা হয়েছে।', 3500);
+  }
+}
+
+async function handleMarkDelivered(e) {
+  const id = e.currentTarget.dataset.id;
+  // For demo, we reuse cancel endpoint with status switch if backend supports. Otherwise, just update locally.
+  if (!confirm('এই অর্ডারটিকে Delivered হিসাবে মার্ক করবেন?')) return;
+  try {
+    // try call to backend (if you have a suitable endpoint) - here we POST to /orders/cancel with special flag ? For most backends you'll need to implement a proper endpoint.
+    const res = await fetch(CONFIG.endpoints.cancelOrder, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ id, setStatus: 'delivered' })
+    });
+    if (!res.ok) {
+      // fallback to local update if backend doesn't support
+      ordersCache = ordersCache.map(o => {
+        const oid = o._id || o.id || '';
+        if (String(oid) === String(id)) return { ...o, status: 'delivered' };
+        return o;
+      });
+    } else {
+      // try to refresh from server
+      await fetchOrders();
+    }
+    renderOrders();
+    updateSummary();
+    showToast('Order marked delivered');
+  } catch (err) {
+    console.error(err);
+    showToast('স্ট্যাটাস আপডেট করতে সমস্যা — লোকালি পরিবর্তন করা হয়েছে।', 3500);
+  }
+}
+
+function handleViewOrder(e) {
+  const id = e.currentTarget.dataset.id;
+  const order = ordersCache.find(o => (o._id||o.id||'') == id);
+  if (!order) { showToast('Order not found'); return; }
+  const parsed = typeof order.order_json === 'string' ? safeJsonParse(order.order_json, order.order_json) : order.order_json;
+  const pretty = JSON.stringify({
+    id: order._id||order.id,
+    name: order.name,
+    phone: order.phone,
+    district: order.district,
+    upazila: order.upazila,
+    address: order.address,
+    items: parsed,
+    total: order.total_amount || order.total,
+    delivery: order.delivery_charge,
+    status: order.status,
+    createdAt: order.createdAt
+  }, null, 2);
+  const win = window.open('', '_blank', 'width=700,height=700,scrollbars=yes');
+  win.document.write('<pre style="font-family:monospace;white-space:pre-wrap;">' + escapeHtml(pretty) + '</pre>');
+}
+
+/* Download/export */
+function downloadData(filename, content) {
+  const blob = new Blob([content], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+downloadBtn.addEventListener('click', () => {
+  const now = new Date();
+  const filename = `orders_backup_${now.toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`;
+  downloadData(filename, JSON.stringify(ordersCache, null, 2));
+  showToast('ডাউনলোড শুরু করা হয়েছে।');
+});
+
+/* Auto backup: programmatically trigger download every 24 hours */
+function startAutoBackup() {
+  // immediate initial backup (optional) - comment this line if not desired
+  // autoBackupNow();
+  backupTimer = setInterval(() => {
+    autoBackupNow();
+  }, CONFIG.autoBackupMs);
+}
+function autoBackupNow() {
+  const now = new Date();
+  const filename = `orders_autobackup_${now.toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`;
+  downloadData(filename, JSON.stringify(ordersCache, null, 2));
+  showToast('Auto backup downloaded.');
+}
+
+/* Auto refresh */
+function startAutoRefresh() {
+  if (refreshTimer) clearInterval(refreshTimer);
+  refreshTimer = setInterval(() => {
+    if (autoRefreshToggle.checked) fetchOrders();
+  }, CONFIG.autoRefreshMs);
+}
+
+/* Start dashboard routine */
+function startDashboard() {
+  fetchOrders();
+  startAutoRefresh();
+  startAutoBackup();
+}
+
+/* UI events */
+searchInput.addEventListener('input', () => renderOrders());
+statusFilter.addEventListener('change', () => renderOrders());
+autoRefreshToggle.addEventListener('change', () => {
+  if (autoRefreshToggle.checked) {
+    startAutoRefresh();
+    showToast('Auto-refresh চালু।');
+  } else {
+    if (refreshTimer) clearInterval(refreshTimer);
+    showToast('Auto-refresh বন্ধ।');
+  }
+});
+
+/* On load */
+requireLoginUI();
+
+/* Utility: escape for logs */
+function log(){ if(window.console) console.log.apply(console, arguments); }
+
+/* If your backend is on another origin and CORS is not enabled, you will need to enable CORS on your server.
+   Also, the demo assumes the backend returns orders in a JSON array; adapt parsing if your response is wrapped. */
+
+</script>
+</body>
+</html>
