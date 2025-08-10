@@ -1,16 +1,3 @@
-<!-- admin-dashboard.html -->
-<!--
-  Single-file Admin Login + Dashboard UI
-  - Save as admin-dashboard.html and open in your browser.
-  - Assumptions about backend endpoints (adjust URLs if yours differ):
-      GET  /orders                -> returns JSON array of orders
-      POST /orders/cancel        -> body { id: "<orderId>" }  (marks order cancelled)
-      POST /admin/login (optional) -> not required for this client-only auth
-  - This file uses a client-side hardcoded admin credential (for quick use).
-  - Credentials (change inside the <script> if you want):
-      email: admin@codenex.local
-      password: Codenex@2025
--->
 <!doctype html>
 <html lang="bn">
 <head>
@@ -39,7 +26,7 @@
       <div class="flex items-center gap-4">
         <img src="https://raw.githubusercontent.com/favicon/logo.png" alt="logo" class="h-8 w-8 object-contain" onerror="this.style.display='none'"/>
         <div>
-          <h1 class="text-lg font-semibold">Codenex • Order Dashboard</h1>
+          <h1 class="text-lg font-semibold">Kadamati • Order Dashboard</h1>
           <p class="text-xs text-gray-500">Admin panel — auto-refresh every 2 minutes • auto-backup every 24 hours</p>
         </div>
       </div>
@@ -127,10 +114,6 @@
       </div>
 
       <!-- FOOTER -->
-      <div class="mt-6 flex justify-between items-center text-sm text-gray-600">
-        <div>Auto backup: প্রতি ২৪ ঘন্টায় একবার (ক্লায়েন্ট-সাইড ট্রিগার — ব্যাকএন্ডে সংরক্ষণ করলে ভাল)</div>
-        <div>আপনি চাইলে এ UI-র ব্যাকএন্ড এন্ডপয়েন্টসমূহ পরিবর্তন করতে পারবেন।</div>
-      </div>
     </div>
   </main>
 
@@ -155,12 +138,6 @@
             <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded flex items-center gap-2">
               <i class="fa-solid fa-lock"></i> লগইন
             </button>
-
-            <div class="text-xs text-gray-500">
-              <div><strong>ডেমো ক্রেডেনশিয়াল:</strong></div>
-              <div>ইমেইল: <code>admin@codenex.local</code></div>
-              <div>পাস: <code>Codenex@2025</code></div>
-            </div>
           </div>
         </form>
       </div>
@@ -176,8 +153,8 @@
    ========================== */
 const CONFIG = {
   // Hardcoded admin credential (client-side). Change as you like.
-  adminEmail: 'admin@codenex.local',
-  adminPassword: 'Codenex@2025',
+  adminEmail: 'sohel@gmail.com',
+  adminPassword: 'sohel@188#$%)',
 
   // Backend endpoints (update to match your server)
   endpoints: {
